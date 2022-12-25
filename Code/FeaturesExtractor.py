@@ -1,9 +1,24 @@
+import io
+import time
+import librosa
 import numpy as np
+import torch
+import torchaudio
+from datasets import load_dataset
+from pydub import AudioSegment
 from sklearn import preprocessing
 from scipy.io.wavfile import read
 from python_speech_features import mfcc
 from python_speech_features import delta
-
+# import os
+# import IPython
+# import matplotlib
+# import matplotlib.pyplot as plt
+# import torch
+# import torchaudio
+from transformers import Wav2Vec2ForCTC, Wav2Vec2Processor
+import wav2vec
+from speechbrain.pretrained import EncoderClassifier
 
 class FeaturesExtractor:
     def __init__(self):
@@ -50,3 +65,57 @@ class FeaturesExtractor:
         double_deltas = delta(deltas, 2)
         combined      = np.hstack((mfcc_feature, deltas, double_deltas))
         return combined
+    def extract_features_2(self, audio_path):
+        """
+        Extract voice features including the Mel Frequency Cepstral Coefficient (MFCC)
+        from an audio using wav2vec2
+
+        Args:
+            audio_path (str) : path to wave file without silent moments.
+        Returns:
+            (array) : Extracted features matrix.
+        """
+        torch.random.manual_seed(0)
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        bundle = torchaudio.pipelines.WAV2VEC2_ASR_BASE_960H
+        model = bundle.get_model().to(device)
+        waveform, sample_rate = torchaudio.load(audio_path)
+        waveform = waveform.to(device)
+
+        if sample_rate != bundle.sample_rate:
+            waveform = torchaudio.functional.resample(waveform, sample_rate, bundle.sample_rate)
+        classifier = EncoderClassifier.from_hparams(source="speechbrain/spkrec-xvect-voxceleb",
+                                                    savedir="pretrained_models/spkrec-xvect-voxceleb")
+        xvector = classifier.encode_batch(waveform)
+        xvector = xvector.detach().cpu().numpy()
+        xvector = xvector[0][0]
+
+        with torch.inference_mode():
+            features, _ = model.extract_features(waveform)
+            features = np.concatenate((features,xvector)).reshape(1,-1)
+        # with torch.inference_mode():
+        #     emission, _ = model(waveform)
+        #     if emission.shape[2] != 562:
+        #         return None
+        #     print("features len: ", len(features)," and ", len(features[0]))
+        #     print("------------------------------------")
+        #     print("emission len: ",len(emission), " and ", len(emission[0]))
+        print(features.shape)
+        return features
+
+    def extract_features_3(self, audio_path):
+        """
+        Extract voice features including the Mel Frequency Cepstral Coefficient (MFCC)
+        from an audio using wav2vec2
+
+        Args:
+            audio_path (str) : path to wave file without silent moments.
+        Returns:
+            (array) : Extracted features matrix.
+        """
+        audio, _ = torchaudio.load(audio_path)
+        model = torchaudio.pipelines.WAV2VEC2_ASR_BASE_960H.get_model()
+        features = model(audio)
+        return features
+
+

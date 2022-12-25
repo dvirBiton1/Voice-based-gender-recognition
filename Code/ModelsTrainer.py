@@ -2,6 +2,7 @@ import os
 import pickle
 import warnings
 import numpy as np
+import torch
 from sklearn import mixture
 from FeaturesExtractor import FeaturesExtractor
 
@@ -20,7 +21,17 @@ class ModelsTrainer:
                                              self.males_training_path)
         # collect voice features
         female_voice_features = self.collect_features(females)
+        print(female_voice_features)
+        print(type(female_voice_features))
+        print(type(female_voice_features[0]))
+        print(type(female_voice_features[0][0]))
+        print(type(female_voice_features[0][0][0]))
+
+        # female_voice_features = female_voice_features.reshape(-1, 524)
+
+
         male_voice_features = self.collect_features(males)
+        # male_voice_features = male_voice_features.numpy()
         # generate gaussian mixture models
         females_gmm = mixture.GaussianMixture(n_components=16, covariance_type='diag', n_init=3)
         males_gmm = mixture.GaussianMixture(n_components=16, covariance_type='diag', n_init=3)
@@ -28,11 +39,8 @@ class ModelsTrainer:
         # males_gmm.means_ = 16, 200
         # print(females_gmm.means_)
         # fit features to models
-        try:
-            females_gmm.fit(female_voice_features)
-            males_gmm.fit(male_voice_features)
-        except:
-            print("Error!")
+        females_gmm.fit(female_voice_features)
+        males_gmm.fit(male_voice_features)
         # save models
         self.save_gmm(females_gmm, "females")
         self.save_gmm(males_gmm, "males")
@@ -58,12 +66,14 @@ class ModelsTrainer:
         for file in files:
             print("%5s %10s" % ("PROCESSNG ", file))
             # extract MFCC & delta MFCC features from audio
-            vector = self.features_extractor.extract_features(file)
+            vector = self.features_extractor.extract_features_2(file)
             # stack the features
             if features.size == 0:
+            # if features.shape == 0:
                 features = vector
             else:
                 features = np.vstack((features, vector))
+        print(features.shape)
         return features
 
     def save_gmm(self, gmm, name):
