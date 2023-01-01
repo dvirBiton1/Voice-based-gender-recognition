@@ -121,10 +121,11 @@ class VoiceGenderRecognizer:
             # calculate the slope between the current and previous explained variance ratios
             slope = variance_ratio[i] - variance_ratio[i - 1]
             if slope < epsilon:
-                print(f"PCA return i was: {i}")
-                return i
+                pass
+                # print(f"PCA return i was: {i}")
+                # return i
         # if something got wrong return 95% of the features
-        return np.argmax(np.cumsum(variance_ratio) >= 0.95) + 1
+        return np.argmax(np.cumsum(variance_ratio) >= 0.99) + 1
 
     def build_and_fit_model(self):
         """
@@ -134,11 +135,18 @@ class VoiceGenderRecognizer:
         combined_list= self.gender_train_test_adapter()
         features_matrix= self.collect_features_from_all_data(combined_list)
         self.features_matrix_transformed= self.pca_calculator(features_matrix)
-        mid= self.males_train_len+self.females_train_len
-        train_only_features= self.features_matrix_transformed[0:mid]
-        gmm = mixture.GaussianMixture(n_components=2, covariance_type='diag', n_init=3)
-        gmm.fit(train_only_features)
-        self.save_gmm(gmm, "VoiceGenderRecognizer")
+        # print(self.features_matrix_transformed)
+        # print(f"len:{len(self.features_matrix_transformed)} and len[0]: {len(self.features_matrix_transformed[0])}")
+        mid= self.females_train_len
+        mid2= self.males_train_len
+        train_only_features_female= self.features_matrix_transformed[0:mid]
+        train_only_features_male = self.features_matrix_transformed[mid:mid+mid2]
+        gmm_male = mixture.GaussianMixture(n_components=1, covariance_type='diag', n_init=3)
+        gmm_female = mixture.GaussianMixture(n_components=1, covariance_type='diag', n_init=3)
+        gmm_male.fit(train_only_features_male)
+        gmm_female.fit(train_only_features_female)
+        self.save_gmm(gmm_male, "gmm_male")
+        self.save_gmm(gmm_female, "gmm_female")
 
 
     def save_gmm(self, gmm, name):
@@ -152,6 +160,69 @@ class VoiceGenderRecognizer:
             pickle.dump(gmm, gmm_file)
         print("%5s %10s" % ("SAVING", filename,))
 
+    # def codetosave(self):
+    #     gmm = pickle.load(open("VoiceGenderRecognizer.gmm", 'rb'))
+    #     gmm.classes_ = np.array(['female', 'male'])
+    #     mid= self.males_train_len+self.females_train_len
+    #     test_only_features= self.features_matrix_transformed[mid:]
+    #     # predict the class probabilities for a the test samples
+    #     predictions= gmm.predict(test_only_features)
+    #     gender_mid= self.females_test_len
+    #     actual="female"
+    #     male_predicted=0
+    #     female_predicted=0
+    #     male_predicted_false = 0
+    #     female_predicted_false = 0
+    #     print("ml",self.males_test_len,"fl", self.females_test_len)
+    #     for i , prediction in enumerate(predictions):
+    #         if i<gender_mid: # female case
+    #             print(f"predict is: {gmm.classes_[prediction]}")
+    #             if gmm.classes_[prediction]=="female":
+    #                 print(f"female predicted! actually: {actual}")
+    #                 female_predicted+=1
+    #             else:
+    #                 print(f"male predicted! actually: {actual}")
+    #                 female_predicted_false+=1
+    #         else: # male case
+    #             print(f"predict is: {gmm.classes_[prediction]}")
+    #             actual="male"
+    #             if gmm.classes_[prediction]=="female":
+    #                 print(f"female predicted! actually: {actual}")
+    #                 male_predicted_false+=1
+    #             else:
+    #                 print(f"male predicted! actually: {actual}")
+    #                 male_predicted+=1
+    #     self.confusion_matrix(male_predicted, male_predicted_false, female_predicted_false, female_predicted)
+        # print("---------- from here -----")
+        # predictions = gmm.predict_proba(test_only_features)
+        # gender_mid= self.females_test_len
+        # actual="female"
+        # male_predicted=0
+        # female_predicted=0
+        # male_predicted_false = 0
+        # female_predicted_false = 0
+        # print("---------")
+        # print("ml",self.males_test_len,"fl", self.females_test_len)
+        # for i , probabilities in enumerate(predictions):
+        #     if i<gender_mid: # female case
+        #         if probabilities[0]>probabilities[1]:
+        #             print(f"female predicted! actually: {actual}")
+        #             female_predicted+=1
+        #         else:
+        #             print(f"male predicted! actually: {actual}")
+        #             female_predicted_false+=1
+        #     else: # male case
+        #         actual="male"
+        #         if probabilities[0]>probabilities[1]:
+        #             print(f"female predicted! actually: {actual}")
+        #             male_predicted_false+=1
+        #         else:
+        #             print(f"male predicted! actually: {actual}")
+        #             male_predicted+=1
+        # self.confusion_matrix(male_predicted,male_predicted_false,female_predicted_false,female_predicted)
+        # print("---------- to here -----")
+
+
 
     def identify_gender(self):
         """
@@ -159,36 +230,37 @@ class VoiceGenderRecognizer:
         by the gmm model saved
         calculate and print the accuracy and the confusion matrix of the model
         """
-        gmm = pickle.load(open("VoiceGenderRecognizer.gmm", 'rb'))
+        gmm_male = pickle.load(open("gmm_male.gmm", 'rb'))
+        gmm_female = pickle.load(open("gmm_female.gmm", 'rb'))
         mid= self.males_train_len+self.females_train_len
         test_only_features= self.features_matrix_transformed[mid:]
-        # predict the class probabilities for a the test samples
-        predictions = gmm.predict_proba(test_only_features)
-        gender_mid= self.females_test_len
+        gender_mid = self.females_test_len
         actual="female"
         male_predicted=0
         female_predicted=0
         male_predicted_false = 0
         female_predicted_false = 0
-        print("---------")
-        print("ml",self.males_test_len,"fl", self.females_test_len)
-        for i , probabilities in enumerate(predictions):
-            if i<gender_mid: # female case
-                if probabilities[0]>probabilities[1]:
+        for i, vector in enumerate(test_only_features):
+            numpy_vector = np.array(vector).reshape(1, -1)
+            is_male_score = gmm_male.score(numpy_vector)
+            is_female_score = gmm_female.score(numpy_vector)
+            if i<gender_mid:
+                if is_female_score>is_male_score:
                     print(f"female predicted! actually: {actual}")
                     female_predicted+=1
                 else:
                     print(f"male predicted! actually: {actual}")
                     female_predicted_false+=1
-            else: # male case
+            else:
                 actual="male"
-                if probabilities[0]<probabilities[1]:
+                if is_female_score>is_male_score:
                     print(f"female predicted! actually: {actual}")
                     male_predicted_false+=1
                 else:
                     print(f"male predicted! actually: {actual}")
                     male_predicted+=1
-        self.confusion_matrix(male_predicted,male_predicted_false,female_predicted_false,female_predicted)
+        self.confusion_matrix(male_predicted, male_predicted_false, female_predicted_false, female_predicted)
+
 
     def confusion_matrix(self,male_p,male_n,female_n,female_p):
         """
@@ -213,8 +285,8 @@ class VoiceGenderRecognizer:
         self.identify_gender()
 
 if __name__ == "__main__":
-    # gender_recognizer = VoiceGenderRecognizer("Train_to_Save/TrainingData/females", "Train_to_Save/TrainingData/males","TestingData/females", "TestingData/males")
     gender_recognizer = VoiceGenderRecognizer("Train_to_Save/TrainingData/females", "Train_to_Save/TrainingData/males","TestingData/females", "TestingData/males")
+    # gender_recognizer = VoiceGenderRecognizer("TrainingData/females", "TrainingData/males","TestingData_2/females", "TestingData_2/males")
 
     gender_recognizer.main()
 
