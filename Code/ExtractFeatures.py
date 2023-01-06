@@ -16,19 +16,14 @@ class ExtractFeatures:
         """
         # initialize hop length
         hop_length = 512
-
         # load audio file
         y, sr = librosa.load(audio_path)
-
         # compute MFCCs
         mfcc = librosa.feature.mfcc(y=y, sr=sr, hop_length=hop_length, n_mfcc=13)
-
         # compute delta MFCCs
         mfcc_delta = librosa.feature.delta(mfcc)
-
         # initialize list to store features
         features = []
-
         # compute mean, std, min, and max for each MFCC and delta MFCC
         for mfcc_coeffs, delta_mfcc_coeffs in zip(mfcc, mfcc_delta):
             mfcc_stats = [np.mean(mfcc_coeffs), np.std(mfcc_coeffs),
@@ -38,7 +33,6 @@ class ExtractFeatures:
 
             # concatenate MFCC and delta MFCC stats into a single list
             features.extend(mfcc_stats + delta_mfcc_stats)
-
         # return feature vector as a numpy array
         return np.array(features)
 
